@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"sync"
 	"log"
 )
 
@@ -12,26 +11,29 @@ const (
 )
 
 type Counter struct {
-	mu sync.Mutex
-	i uint64
+	Iterator chan uint64
 }
 
-func (c *Counter) Get() uint64 {
-	c.mu.Lock()
-	c.i++
-	c.mu.Unlock()
-	return c.i
+func (c *Counter) Iterate() {
+	var i uint64
+	for {
+		i++
+		c.Iterator <- i
+	}
 }
 
 func main() {
-	c := Counter{}
+	c := Counter{
+		Iterator: make(chan uint64, 0),
+	}
+	go c.Iterate()
 	http.Handle("/", http.HandlerFunc(c.CountHandler))
 	log.Printf("Listen http server %v", SOCKET)
 	log.Fatal(http.ListenAndServe(SOCKET, nil))
 }
 
 func (c *Counter) CountHandler(w http.ResponseWriter, r *http.Request) {
-	i := fmt.Sprintf("%v", c.Get())
+	i := fmt.Sprintf("%v", <-c.Iterator)
 	_, err := w.Write([]byte(i))
 	log.Println(i)
 	if err != nil {
